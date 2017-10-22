@@ -1,0 +1,190 @@
+CONSTANT clock_frequency_in_MHz_port, 02
+CONSTANT set_baud_rate_port, 02
+CONSTANT led_outport, 04
+CONSTANT l_mtr, 08
+CONSTANT r_mtr, 10
+CONSTANT l_led, 20
+CONSTANT r_led, 40
+CONSTANT slow_fast, 80
+
+
+CONSTANT 1us_delay_count, 3D              ;8-bit value
+CONSTANT 1ms_delay_count0, 3E             ;16-bit value
+CONSTANT 1ms_delay_count1, 3F
+JUMP cold_start                           ;Avoid address 003 on start up
+JUMP cold_start
+JUMP cold_start
+JUMP cold_start                           ;Address 003
+
+		cold_start: INPUT s0, clock_frequency_in_MHz_port     ;read clock frequency value (MHz)
+					LOAD sF, 00                               ;clear 32-bit accumulator [sF,sE,sD,sC]
+					LOAD sE, 00
+					LOAD sD, 00
+					LOAD sC, 00
+  clock_to_Hz_loop: ADD sC, 40                                ;add 1,000,000 to accumulator
+					ADDCY sD, 42
+					ADDCY sE, 0F
+					ADDCY sF, 00
+					SUB s0, 1'd                               ;decrement MHz to go
+					JUMP NZ, clock_to_Hz_loop
+					LOAD s0, FF                               ;initialise for division result
+set_baud_rate_loop: ADD s0, 1'd                               ;increment division result
+					SUB sC, 00                                ;subtract 1,843,200
+					SUBCY sD, 20
+					SUBCY sE, 1C
+					SUBCY sF, 00
+					JUMP NC, set_baud_rate_loop
+					OUTPUT s0, set_baud_rate_port
+					CALL reset_UART_macros
+					INPUT s6, clock_frequency_in_MHz_port     ;Read input port
+					LOAD sF, 00                               ;clear accumulator
+					LOAD sE, 00
+					LOAD sD, 00
+					LOAD sC, 00
+   clock_freq_loop: ADD sC, 40                                ;add 1,000,000 (0F4240 hex)
+					ADDCY sD, 42
+					ADDCY sE, 0F
+					ADDCY sF, 00
+					SUB s6, 1'd                               ;repeat for number of MHz
+					JUMP NZ, clock_freq_loop
+					LOAD s6, FF                               ;initialise for division result
+	baud_rate_loop: ADD s6, 1'd                               ;increment result
+					SUB sC, 00                                ;subtract 1,843,200 (1C2000 hex)
+					SUBCY sD, 20
+					SUBCY sE, 1C
+					SUBCY sF, 00
+					JUMP NC, baud_rate_loop                   ;test for underflow
+					JUMP main
+			  main: LOAD s4, 0'd
+	wait_for_start: CALL UART_RX
+					JUMP Z, wait_for_start                    ;check for UART timeout
+					COMPARE s5, "0"                           ;test character received
+					JUMP Z, led_output_0
+					COMPARE s5, "1"                           ;test character received
+					JUMP Z, led_output_1
+					COMPARE s5, "2"
+					JUMP Z, led_output_2
+					COMPARE s5, "3"
+					JUMP Z, led_output_3
+					COMPARE s5, "4"
+					JUMP Z, led_output_4
+					COMPARE s5, "5"
+					JUMP Z, led_output_5
+					COMPARE s5, "6"
+					JUMP Z, led_output_6
+					COMPARE s5, "7"
+					JUMP Z, led_output_7
+					COMPARE s5, "8"
+					JUMP Z, led_output_8
+					COMPARE s5, "N"
+					JUMP Z, led_output_9
+					COMPARE s5, "S"
+					JUMP Z, led_output_10
+					JUMP NZ, wait_for_start
+	   led_output_0: 
+					LOAD s4, 0'd
+					OUTPUT s4, led_outport
+					LOAD s4, 0'd
+					OUTPUT s4, l_mtr
+					LOAD s4, 0'd
+					OUTPUT s4, r_mtr
+					LOAD s4, 0'd
+					OUTPUT s4, l_led
+					LOAD s4, 0'd
+					OUTPUT s4, r_led
+					JUMP Z, wait_for_start
+	   led_output_1: 
+					LOAD s4, 1'd
+					OUTPUT s4, led_outport
+					LOAD s4, 1'd
+					OUTPUT s4, l_led
+					JUMP Z, wait_for_start
+	   led_output_2: 
+					LOAD s4, 2'd
+					OUTPUT s4, led_outport
+					LOAD s4, 1'd
+					OUTPUT s4, r_led
+					JUMP Z, wait_for_start
+	   led_output_3: 
+					LOAD s4, 3'd
+					OUTPUT s4, led_outport
+					LOAD s4, 0'd
+					OUTPUT s4, l_led
+					JUMP Z, wait_for_start
+	   led_output_4: 
+					LOAD s4, 4'd
+					OUTPUT s4, led_outport
+					LOAD s4, 0'd
+					OUTPUT s4, r_led
+					JUMP Z, wait_for_start
+	   led_output_5: 
+					LOAD s4, 5'd
+					OUTPUT s4, led_outport
+					LOAD s4, 0'd
+					OUTPUT s4, l_mtr
+					LOAD s4, 0'd
+					OUTPUT s4, r_mtr
+					JUMP Z, wait_for_start
+	   led_output_6: 
+					LOAD s4, 6'd
+					OUTPUT s4, led_outport
+					LOAD s4, 0'd
+					OUTPUT s4, l_mtr
+					LOAD s4, 1'd
+					OUTPUT s4, r_mtr
+					JUMP Z, wait_for_start
+	   led_output_7: 
+					LOAD s4, 7'd
+					OUTPUT s4, led_outport
+					LOAD s4, 1'd
+					OUTPUT s4, l_mtr
+					LOAD s4, 0'd
+					OUTPUT s4, r_mtr
+					JUMP Z, wait_for_start
+	   led_output_8: 
+					LOAD s4, 8'd
+					OUTPUT s4, led_outport
+					LOAD s4, 1'd
+					OUTPUT s4, l_mtr
+					LOAD s4, 1'd
+					OUTPUT s4, r_mtr
+					JUMP Z, wait_for_start
+	   led_output_9: 
+					LOAD s4, 1'd
+					OUTPUT s4, slow_fast
+					JUMP Z, wait_for_start
+	   led_output_10: 
+					LOAD s4, 0'd
+					OUTPUT s4, slow_fast
+					JUMP Z, wait_for_start
+	 send_hex_byte: LOAD s5, s4                               ;isolate upper nibble
+					SR0 s5
+					SR0 s5
+					SR0 s5
+					SR0 s5
+					CALL hex_to_ASCII                         ; convert to ASCII
+					CALL UART_TX                              ;send upper digit to UART
+					LOAD s5, s4                               ;isolate lower nibble
+					AND s5, 0F
+					CALL hex_to_ASCII                         ; convert to ASCII
+					CALL UART_TX                              ;send lower digit to UART
+					RETURN 
+	   send_Hex_CR: CALL send_space
+					LOAD s5, "H"
+					CALL UART_TX
+					LOAD s5, "e"
+					CALL UART_TX
+					LOAD s5, "x"
+					CALL UART_TX
+					LOAD s5, CR
+					JUMP UART_TX                              ;includes RETURN
+	  hex_to_ASCII: SUB s5, 0A                                ;test if value is in range 0 to 9
+					JUMP C, number_char
+					ADD s5, 07                                ;ASCII char A to F in range 41 to 46
+	   number_char: ADD s5, 3A                                ;ASCII char 0 to 9 in range 30 to 40
+					RETURN 
+		send_space: LOAD s5, " "
+					JUMP UART_TX                              ;includes RETURN
+
+
+INCLUDE "uart_interface_routines.psm"
